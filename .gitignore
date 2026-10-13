@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test results and output
+results*.json
+results*.csv
+topology*.json
+*.log
+htmlcov/
+.coverage
+.pytest_cache/
+
+# Mininet
+*.dump
+
+# Local secrets
+.env
+*.pem
+*.key

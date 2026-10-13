@@ -1,0 +1,12 @@
+# Network Diagnostic and Path Analysis Tool - Python Dependencies
+#
+# Install with: pip3 install -r requirements.txt
+#
+# NOTE: System packages (mininet, openvswitch-switch) are NOT listed here.
+# Install them via apt on Ubuntu:
+#   sudo apt install -y mininet openvswitch-switch
+#
+# Ryu SDN controller (required only on the Ubuntu demo VM):
+ryu-manager; python_version < "3.12"
+# NOTE: For Python 3.12+, ryu may require patching or using os-ken fork.
+# See docs/demo-guide.md for details.
