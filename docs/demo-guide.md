@@ -171,16 +171,92 @@ python3 src/analysis/report.py --diagnostic results.json --topology topology.jso
 
 ---
 
+### Step 8: Dynamic Link Failure & Failover Demonstration (Deliverable 2 - Robustness)
+
+Inside the Mininet CLI or using the automated failover demo script:
+
+```bash
+# Automated 3-phase demonstration (Baseline -> Link s1-s2 Down -> Reroute -> Recovery):
+sudo python3 scripts/failover_demo.py
+```
+
+Or manually inside the **Mininet CLI (Terminal 2)**:
+```bash
+# Take down upper branch link
+mininet> link s1 s2 down
+
+# Continuously send UDP probes from h1 to h2
+mininet> h1 python3 src/diagnostic/udp_client.py --target 10.0.0.2 --port 5005 --count 15
+
+# Confirm traffic now routes through s3 (lower branch) with minimal packet drop!
+
+# Restore link
+mininet> link s1 s2 up
+```
+
+---
+
+### Step 9: OpenFlow Flow Table Inspection
+
+Inspect active flow rules across switches `s1`-`s4` to verify which candidate path is physically programmed:
+
+```bash
+sudo python3 scripts/flow_inspector.py
+```
+
+**Expected Behavior:**
+- Outputs tables showing OpenFlow matches and actions.
+- Automatically infers whether the upper path (`s1 -> s2 -> s4`) or rerouted path (`s1 -> s3 -> s4`) is forwarding traffic.
+
+---
+
+### Step 10: Multi-Condition Performance Benchmarking
+
+Execute the full empirical benchmarking suite to generate comparative evaluation metrics across baseline, failure, static network, and stress conditions:
+
+```bash
+python3 scripts/benchmark_runner.py --count 20
+python3 scripts/generate_performance_report.py
+```
+
+**Expected Behavior:**
+- Generates `benchmark_results.json` and renders `docs/performance-report.md`.
+- Formats comparison tables comparing Static Network (100% loss) vs. Dynamic SDN (recovers with low loss).
+
+---
+
 ## 3. Quick Local Test (Host / No Mininet)
 
-For rapid development and verification of socket code without requiring Mininet or Ryu, execute the loopback test on your local machine:
+For rapid development and verification of socket code without requiring Mininet or Ryu, execute the test suite and standalone simulation:
 
-### Terminal 1: Start Local Server
+### 1. Run Automated Test Suite (67+ Tests)
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+### 2. Standalone Dynamic Failover Simulation
+```bash
+python3 scripts/failover_demo.py --mock
+```
+
+### 3. Standalone Flow Table Inspection (Mock Mode)
+```bash
+python3 scripts/flow_inspector.py --mock
+```
+
+### 4. Standalone Multi-Condition Performance Benchmark
+```bash
+python3 scripts/benchmark_runner.py --count 10
+python3 scripts/generate_performance_report.py
+```
+
+### 5. Loopback UDP Diagnostic Test
+In Terminal 1:
 ```bash
 python3 src/diagnostic/udp_server.py --host 127.0.0.1 --port 5005
 ```
 
-### Terminal 2: Run Local Client
+In Terminal 2:
 ```bash
 python3 src/diagnostic/udp_client.py --target 127.0.0.1 --port 5005 --count 10
 ```

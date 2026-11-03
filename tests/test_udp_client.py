@@ -159,6 +159,29 @@ class TestUDPClientStatistics(unittest.TestCase):
         self.assertIsNone(stats["rtt_min_ms"])
         self.assertIsNone(stats["rtt_max_ms"])
         self.assertIsNone(stats["rtt_avg_ms"])
+        self.assertIsNone(stats["jitter_ms"])
+
+    def test_jitter_calculation_multiple_probes(self) -> None:
+        """Verify jitter computes mean absolute difference of consecutive RTTs."""
+        self.client.probes_sent = 3
+        self.client.responses_received = 3
+        # RTTs: 10.0, 14.0, 11.0
+        # Differences: |14-10| = 4.0, |11-14| = 3.0
+        # Mean jitter: (4.0 + 3.0) / 2 = 3.5 ms
+        self.client.rtt_records = [10.0, 14.0, 11.0]
+
+        stats = self.client.calculate_statistics()
+        self.assertAlmostEqual(stats["jitter_ms"], 3.5, places=2)
+        self.assertAlmostEqual(stats["rtt_mdev_ms"], 3.5, places=2)
+
+    def test_jitter_single_probe(self) -> None:
+        """Verify jitter is 0.0 when only one response is received."""
+        self.client.probes_sent = 1
+        self.client.responses_received = 1
+        self.client.rtt_records = [5.2]
+
+        stats = self.client.calculate_statistics()
+        self.assertEqual(stats["jitter_ms"], 0.0)
 
 
 class TestUDPClientSocketHandling(unittest.TestCase):

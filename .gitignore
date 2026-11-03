@@ -31,6 +31,8 @@ Thumbs.db
 results*.json
 results*.csv
 topology*.json
+benchmark_results*.json
+failover_demo_results*.json
 *.log
 htmlcov/
 .coverage

@@ -23,92 +23,114 @@ The system separates functionality into three tiers:
 
 ```mermaid
 flowchart TD
-    subgraph DataPlane ["Data Plane (Mininet / Open vSwitch)"]
-        H1["Host h1 (10.0.0.1)"]
-        H2["Host h2 (10.0.0.2)"]
-        S1["Switch s1 (dpid: 1)"]
-        S2["Switch s2 (dpid: 2)"]
-        S3["Switch s3 (dpid: 3)"]
-        S4["Switch s4 (dpid: 4)"]
-
-        H1 <--> S1
-        S1 <--> S2
-        S1 <--> S3
-        S2 <--> S4
-        S3 <--> S4
-        S4 <--> H2
+    subgraph AppTier ["Tier 1: Application & Diagnostic Tools"]
+        direction LR
+        UDPClient["UDP Client<br/><code>udp_client.py</code>"]
+        UDPServer["UDP Echo Server<br/><code>udp_server.py</code>"]
+        ReportGen["Report & Path Analyzer<br/><code>report.py</code> / <code>path_analysis.py</code>"]
     end
 
-    subgraph ControlPlane ["Control Plane (Ryu SDN Controller)"]
-        RyuCore["Ryu OpenFlow 1.3 App<br/>(L2 Learning & LLDP Discovery)"]
-        RestAPI["Topology REST API<br/>(WSGI HTTP Server: 8080)"]
+    subgraph ControlTier ["Tier 2: SDN Control Plane (Ryu Controller)"]
+        direction LR
+        RyuCore["Ryu OpenFlow 1.3 Controller<br/>(L2 Learning & Dynamic Rerouting Engine)"]
+        RestAPI["REST API Server<br/>(Port 8080: <code>/topology/*</code>)"]
         RyuCore <--> RestAPI
     end
 
-    subgraph Diagnostics ["Diagnostic & Application Tier"]
-        UDPClient["UDP Client (h1)<br/>(udp_client.py)"]
-        UDPServer["UDP Server (h2)<br/>(udp_server.py)"]
-        TopoClient["Topology Client<br/>(topology.py)"]
-        PathAnalysis["Path Analysis Module<br/>(path_analysis.py)"]
-        ReportGen["Integrated Report Engine<br/>(report.py)"]
-
-        UDPClient -.->|"Probes: JSON over UDP:5005"| UDPServer
-        TopoClient -->|"HTTP GET"| RestAPI
-        TopoClient -->|"Topology JSON"| PathAnalysis
-        UDPClient -->|"Diagnostic JSON"| ReportGen
-        PathAnalysis -->|"Candidate Paths"| ReportGen
+    subgraph DataTier ["Tier 3: Mininet Emulated Data Plane"]
+        direction LR
+        H1["Host h1<br/>10.0.0.1"] --- S1["Switch s1"]
+        S1 --- S2["Switch s2<br/>(Primary)"]
+        S1 --- S3["Switch s3<br/>(Backup)"]
+        S2 --- S4["Switch s4"]
+        S3 --- S4
+        S4 --- H2["Host h2<br/>10.0.0.2"]
     end
 
-    %% OpenFlow Control Channels
-    S1 <==>|"OpenFlow 1.3 / LLDP"| RyuCore
-    S2 <==>|"OpenFlow 1.3 / LLDP"| RyuCore
-    S3 <==>|"OpenFlow 1.3 / LLDP"| RyuCore
-    S4 <==>|"OpenFlow 1.3 / LLDP"| RyuCore
+    %% Application endpoints running on hosts
+    H1 -.->|"Runs on"| UDPClient
+    H2 -.->|"Runs on"| UDPServer
 
-    H1 -.->|"Runs"| UDPClient
-    H2 -.->|"Runs"| UDPServer
+    %% Active diagnostic probing
+    UDPClient ====>|"Active UDP Probes (Port 5005)"| UDPServer
+
+    %% Control plane interactions
+    ReportGen ---->|"HTTP GET /topology/full"| RestAPI
+    UDPClient ---->|"results.json"| ReportGen
+
+    %% OpenFlow 1.3 control channels
+    S1 -.-|"OpenFlow 1.3 / LLDP"| RyuCore
+    S2 -.-|"OpenFlow 1.3 / LLDP"| RyuCore
+    S3 -.-|"OpenFlow 1.3 / LLDP"| RyuCore
+    S4 -.-|"OpenFlow 1.3 / LLDP"| RyuCore
 ```
 
 ---
 
 ## 3. Data Flow Diagram
 
-The following sequence illustrates how diagnostic probes flow across the data plane while topology queries flow through the control plane to assemble the final report.
+The interaction between diagnostic probes in the data plane and topology queries in the control plane is illustrated below in two complementary views:
+
+### High-Level End-to-End Pipeline
+
+```mermaid
+flowchart LR
+    subgraph DataFlow ["1. Active Data-Plane Probing"]
+        direction TB
+        C["UDP Client (h1)"] -->|"Send UDP Probes"| DP["Diamond Switches (s1-s4)"]
+        DP -->|"Forward Datagram"| S["Echo Server (h2)"]
+        S -->|"Echo Response"| C
+        C -->|"Save results.json<br/>(RTT, Loss, Jitter)"| R["Integrated Report<br/>(report.py)"]
+    end
+
+    subgraph ControlFlow ["2. SDN Control-Plane Discovery"]
+        direction TB
+        SW["Switches (s1-s4)"] -->|"LLDP / Packet-In"| CTRL["Ryu Controller"]
+        CTRL -->|"REST API (:8080)"| TC["Topology Client"]
+        TC -->|"Save topology.json<br/>(Switches, Links, Hosts)"| R
+    end
+
+    R --> Out["Final Diagnostic & Path Report<br/>(Text / JSON)"]
+```
+
+### Detailed Sequence Flow
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Client as UDP Client (h1)
-    participant DataPlane as Switches (s1-s4)
-    participant Server as UDP Echo Server (h2)
-    participant Controller as Ryu Controller (Port 8080)
-    participant TopoClient as Topology Client
-    participant Report as Report Generator
+    participant H1 as Host 1 (udp_client)
+    participant DP as Data Plane (Switches s1-s4)
+    participant H2 as Host 2 (udp_server)
+    participant SDN as Ryu Controller (:8080)
 
-    %% Phase 1: SDN Discovery
-    Note over DataPlane,Controller: LLDP link discovery and L2 learning
-    DataPlane->>Controller: Packet-In / LLDP packets
-    Controller->>Controller: Build Switch & Link adjacency tables
-
-    %% Phase 2: UDP Diagnostic Probing
-    Note over Client,Server: End-to-end active data-plane probing
-    loop For N configured probes (e.g., count=20)
-        Client->>DataPlane: UDP Probe JSON (seq=i, timestamp=t1)
-        DataPlane->>Server: Forwarded datagram
-        Server->>DataPlane: UDP Echo JSON (seq=i, t1, server_time=t2)
-        DataPlane->>Client: Returned datagram
-        Client->>Client: Record RTT (t_recv - t1) and sequence tracking
+    %% Stage 1
+    rect rgb(240, 248, 255)
+    Note over DP,SDN: Stage 1: Topology Discovery & Flow Installation
+    DP->>SDN: LLDP Packets & Switch Connection Handshake
+    SDN->>DP: Install Initial Forwarding Rules (s1 -> s2 -> s4)
     end
-    Client->>Report: Output results.json
 
-    %% Phase 3: Topology Extraction & Correlation
-    Note over TopoClient,Report: Topology extraction & graph synthesis
-    TopoClient->>Controller: HTTP GET /topology/full
-    Controller-->>TopoClient: JSON (switches, links, hosts)
-    TopoClient->>Report: Output topology.json
-    Report->>Report: BFS shortest paths & DFS candidate paths
-    Report->>Report: Correlate latency/loss with path topology
-    Note over Report: Integrated Diagnostic Report is generated
+    %% Stage 2
+    rect rgb(245, 255, 245)
+    Note over H1,H2: Stage 2: Active Data-Plane Diagnostics
+    loop Probe Sequence (N Probes)
+        H1->>DP: UDP Probe (Seq #, Timestamp)
+        DP->>H2: Forwarded Datagram
+        H2->>DP: Echo Reply (Server Timestamp)
+        DP->>H1: Returned Datagram
+        H1->>H1: Compute RTT & Jitter
+    end
+    H1->>H1: Export results.json
+    end
+
+    %% Stage 3
+    rect rgb(255, 250, 240)
+    Note over H1,SDN: Stage 3: Control-Plane Correlation & Reporting
+    H1->>SDN: HTTP GET /topology/full
+    SDN-->>H1: Discovered Switches, Links, Hosts
+    H1->>H1: Compute Shortest & Candidate Graph Paths
+    H1->>H1: Output Integrated Correlation Report
+    end
 ```
 
 ---
@@ -163,14 +185,14 @@ Returned from `udp_server.py` back to `udp_client.py`:
   "type": "echo",
   "seq": 1,
   "timestamp": 1728753291.104251,
-  "server_time": 1728753291.105128,
+  "server_timestamp": 1728753291.105128,
   "payload": "DIAG"
 }
 ```
 - `type`: String literal `"echo"` confirming response packet.
 - `seq`: Matching integer sequence number from the incoming probe.
 - `timestamp`: Original client timestamp preserved for zero-state client RTT calculation.
-- `server_time`: High-precision epoch timestamp recorded by the server upon reception.
+- `server_timestamp`: High-precision epoch timestamp recorded by the server upon reception.
 - `payload`: Preserved payload string.
 
 ---
@@ -185,6 +207,7 @@ The Ryu controller application exposes WSGI REST endpoints on default port `8080
 | `GET` | `/topology/links` | Lists unidirectional and bidirectional discovered inter-switch links. | `[{"src": {"dpid": "...", "port_no": 2}, "dst": {"dpid": "...", "port_no": 1}}]` |
 | `GET` | `/topology/hosts` | Lists learned end-host MAC and attached switch ports. | `[{"mac": "00:00:00:00:00:01", "ipv4": ["10.0.0.1"], "port": {...}}]` |
 | `GET` | `/topology/full` | Aggregated JSON payload containing switches, links, and hosts. | `{"switches": [...], "links": [...], "hosts": [...]}` |
+| `GET` | `/topology/status` | Dynamic SDN status, active shortest paths, and recent event history. | `{"switches_online": 4, "active_paths": {...}, "recent_events": [...]}` |
 
 ---
 
@@ -217,7 +240,28 @@ The network topology is abstracted into an undirected graph represented as an ad
 
 ---
 
-## 10. Key Design Decisions and Rationale
+## 10. Dynamic SDN Rerouting & Fault Recovery Engine
+
+The controller implements an active control-plane loop to achieve self-healing network behavior:
+
+```mermaid
+flowchart TD
+    E1["Link Failure Detected<br/>(EventLinkDelete)"] --> E2["Update NetworkGraph<br/>(remove_link u, v)"]
+    E2 --> E3["Purge Stale OpenFlow Rules<br/>(OFPFC_DELETE on failed ports)"]
+    E3 --> E4["Purge Stale mac_to_port Mappings<br/>(Evict obsolete egress ports)"]
+    E4 --> E5["Recompute BFS Shortest Path<br/>(e.g., s1 -> s3 -> s4)"]
+    E5 --> E6["Push Proactive Flow Entries<br/>(Priority 10 OpenFlow Rules)"]
+    E6 --> E7["Traffic Restored Along Alternate Route<br/>(Measured loss drops back to 0%)"]
+```
+
+1. **Failure Detection:** Ryu's LLDP topology discovery triggers `EventLinkDelete` within 100 ms of physical or virtual link disruption.
+2. **Stale Flow Purging:** The controller issues `OFPFlowMod` commands with command `OFPFC_DELETE` matching the disabled egress ports on both boundary switches, preventing black-holing.
+3. **Graph Recalculation:** The in-memory `NetworkGraph` removes the failed edge and invokes BFS shortest-path search to find alternate loop-free routes (e.g., switching from upper path `s1-s2-s4` to lower path `s1-s3-s4`).
+4. **Proactive Flow Installation:** Proactive OpenFlow rules with `priority=10` are pushed along the newly selected path before standard reactive flood-learning is required.
+
+---
+
+## 11. Key Design Decisions and Rationale
 
 1. **UDP Over TCP for Diagnostics:**
    - *Rationale:* TCP features built-in retransmissions, cumulative acknowledgments, and congestion control (window throttling), which distort raw network delay and mask packet loss. UDP datagrams reveal raw latency, jitter, and dropped packet behavior without protocol overhead.

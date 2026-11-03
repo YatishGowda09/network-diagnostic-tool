@@ -92,6 +92,19 @@ class TopologyClient:
             return data
         return []
 
+    def get_status(self) -> Dict[str, Any]:
+        """Retrieve dynamic SDN operational status, active paths, and events."""
+        data = self._make_request("/topology/status")
+        if isinstance(data, dict):
+            return data
+        return {
+            "switches_online": 0,
+            "links_active": 0,
+            "hosts_tracked": 0,
+            "active_paths": {},
+            "recent_events": [],
+        }
+
     def get_full_topology(self) -> Dict[str, Any]:
         """Retrieve aggregated topology view (switches, links, hosts)."""
         data = self._make_request("/topology/full")
@@ -187,6 +200,11 @@ def main() -> None:
         help="File path to load an offline topology JSON instead of querying controller",
     )
     parser.add_argument(
+        "--status",
+        action="store_true",
+        help="Query controller dynamic status and active path information",
+    )
+    parser.add_argument(
         "--verbose",
         "-v",
         action="store_true",
@@ -231,6 +249,20 @@ def main() -> None:
             f"  MAC: {host.get('mac')} | IP: {host.get('ipv4')} | "
             f"Attached: {host.get('dpid')}:{host.get('port')}"
         )
+
+    if args.status:
+        print(f"\n--- Dynamic SDN Status ({args.controller}) ---")
+        status = client.get_status()
+        print(f"Switches Online : {status.get('switches_online')}")
+        print(f"Active Links    : {status.get('links_active')}")
+        print(f"Tracked Hosts   : {status.get('hosts_tracked')}")
+        print("Active Shortest Paths:")
+        for pair, pdata in status.get("active_paths", {}).items():
+            path_str = " -> ".join(pdata.get("path", []))
+            print(f"  {pair}: {path_str} ({pdata.get('hops')} hops, status: {pdata.get('status')})")
+        print("Recent Controller Events:")
+        for ev in status.get("recent_events", [])[-5:]:
+            print(f"  [{ev.get('type')}] {ev}")
 
     if args.save:
         client.save_topology(args.save, topology)

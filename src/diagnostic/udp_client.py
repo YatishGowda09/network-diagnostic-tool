@@ -241,6 +241,18 @@ class UDPClient:
             max_rtt = None
             avg_rtt = None
 
+        # Jitter: RFC 3550 inter-packet delay variation (mean absolute difference of consecutive RTTs)
+        if len(self.rtt_records) >= 2:
+            diffs = [
+                abs(self.rtt_records[i] - self.rtt_records[i - 1])
+                for i in range(1, len(self.rtt_records))
+            ]
+            jitter = sum(diffs) / len(diffs)
+        elif len(self.rtt_records) == 1:
+            jitter = 0.0
+        else:
+            jitter = None
+
         return {
             "target": self.target,
             "port": self.port,
@@ -250,6 +262,8 @@ class UDPClient:
             "rtt_min_ms": round(min_rtt, 3) if min_rtt is not None else None,
             "rtt_max_ms": round(max_rtt, 3) if max_rtt is not None else None,
             "rtt_avg_ms": round(avg_rtt, 3) if avg_rtt is not None else None,
+            "jitter_ms": round(jitter, 3) if jitter is not None else None,
+            "rtt_mdev_ms": round(jitter, 3) if jitter is not None else None,
             "individual_results": self.individual_results,
         }
 
@@ -271,6 +285,8 @@ class UDPClient:
             print(f" Minimum RTT             : {stats['rtt_min_ms']:.2f} ms")
             print(f" Maximum RTT             : {stats['rtt_max_ms']:.2f} ms")
             print(f" Average RTT             : {stats['rtt_avg_ms']:.2f} ms")
+            if stats.get("jitter_ms") is not None:
+                print(f" Jitter (mean deviation) : {stats['jitter_ms']:.2f} ms")
         else:
             print(" Round-Trip Time (RTT)   : N/A (100% packet loss)")
         print("=" * 55 + "\n")

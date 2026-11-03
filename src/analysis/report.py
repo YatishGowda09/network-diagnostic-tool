@@ -261,6 +261,8 @@ def main() -> None:
                 "rtt_min_ms": diagnostic_data.get("rtt_min_ms"),
                 "rtt_avg_ms": diagnostic_data.get("rtt_avg_ms"),
                 "rtt_max_ms": diagnostic_data.get("rtt_max_ms"),
+                "rtt_mdev_ms": diagnostic_data.get("rtt_mdev_ms", diagnostic_data.get("jitter_ms")),
+                "jitter_ms": diagnostic_data.get("jitter_ms", diagnostic_data.get("rtt_mdev_ms")),
             }
         except (OSError, json.JSONDecodeError) as err:
             print(f"Error loading diagnostic file: {err}")

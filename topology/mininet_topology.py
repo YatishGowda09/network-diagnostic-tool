@@ -75,6 +75,46 @@ if MININET_AVAILABLE:
             self.addLink(s3, s4, bw=bw)
 
 
+def inject_link_failure(net: Any, node1: str, node2: str) -> bool:
+    """Programmatically bring down a link between two nodes in Mininet.
+
+    Args:
+        net: Active Mininet instance.
+        node1: First node name (e.g., 's1').
+        node2: Second node name (e.g., 's2').
+
+    Returns:
+        True if link was configured down, False on error.
+    """
+    try:
+        net.configLinkStatus(node1, node2, "down")
+        print(f"[FAULT INJECTION] Link {node1} <---> {node2} set to DOWN")
+        return True
+    except Exception as err:
+        print(f"[ERROR] Failed to set link {node1}-{node2} down: {err}", file=sys.stderr)
+        return False
+
+
+def restore_link(net: Any, node1: str, node2: str) -> bool:
+    """Programmatically restore a link between two nodes in Mininet.
+
+    Args:
+        net: Active Mininet instance.
+        node1: First node name (e.g., 's1').
+        node2: Second node name (e.g., 's2').
+
+    Returns:
+        True if link was configured up, False on error.
+    """
+    try:
+        net.configLinkStatus(node1, node2, "up")
+        print(f"[FAULT RECOVERY] Link {node1} <---> {node2} restored to UP")
+        return True
+    except Exception as err:
+        print(f"[ERROR] Failed to restore link {node1}-{node2}: {err}", file=sys.stderr)
+        return False
+
+
 def print_topology_info(controller_ip: str, controller_port: int, bw: int) -> None:
     """Print summary banner of the diamond topology configuration."""
     print("=" * 65)

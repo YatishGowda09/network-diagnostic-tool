@@ -193,6 +193,26 @@ class TestSDNTopologyClient(unittest.TestCase):
         self.assertEqual(switches, [])
 
     @patch("urllib.request.urlopen")
+    def test_get_status_success(self, mock_urlopen: MagicMock) -> None:
+        """Verify successful retrieval of dynamic SDN status endpoint."""
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.read.return_value = json.dumps({
+            "switches_online": 4,
+            "links_active": 4,
+            "hosts_tracked": 2,
+            "active_paths": {"h1 <-> h2": {"path": ["s1", "s2", "s4"], "hops": 2}},
+            "recent_events": [{"type": "link_delete"}],
+        }).encode("utf-8")
+        mock_response.__enter__.return_value = mock_response
+        mock_urlopen.return_value = mock_response
+
+        status = self.client.get_status()
+        self.assertEqual(status["switches_online"], 4)
+        self.assertEqual(status["links_active"], 4)
+        self.assertEqual(len(status["recent_events"]), 1)
+
+    @patch("urllib.request.urlopen")
     def test_malformed_json_response_from_controller(self, mock_urlopen: MagicMock) -> None:
         """Verify malformed JSON from controller endpoint returns empty list."""
         mock_response = MagicMock()
