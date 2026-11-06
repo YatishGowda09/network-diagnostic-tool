@@ -1,8 +1,7 @@
 """SDN Topology Client.
 
-This module provides a client interface to query topology data from the
-Ryu SDN Controller's REST API using Python's standard library (`urllib.request`).
-Supports offline file caching, offline topology loading, and standalone CLI usage.
+Provides a client interface to query topology data from the Ryu SDN
+Controller's REST API using Python's standard library (urllib.request).
 """
 
 from __future__ import annotations
@@ -10,9 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import sys
 import urllib.error
-import urllib.parse
 import urllib.request
 from typing import Any, Dict, List, Optional
 
@@ -20,27 +17,14 @@ logger = logging.getLogger(__name__)
 
 
 class TopologyClient:
-    """Client for interacting with the SDN Controller's Topology REST API."""
+    """Client for interacting with the Ryu SDN Controller Topology REST API."""
 
     def __init__(self, base_url: str = "http://127.0.0.1:8080", timeout: float = 5.0) -> None:
-        """Initialize TopologyClient.
-
-        Args:
-            base_url: Base URL of controller REST service (e.g., http://127.0.0.1:8080)
-            timeout: Request timeout in seconds
-        """
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
 
     def _make_request(self, endpoint: str) -> Optional[Any]:
-        """Send HTTP GET request to controller endpoint and parse JSON.
-
-        Args:
-            endpoint: Relative path endpoint (e.g. '/topology/switches')
-
-        Returns:
-            Parsed JSON object (dict/list) or None if request fails.
-        """
+        """Send HTTP GET request to controller endpoint and parse JSON."""
         url = f"{self.base_url}{endpoint}"
         req = urllib.request.Request(
             url,
@@ -48,52 +32,31 @@ class TopologyClient:
         )
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as response:
-                status = response.status
-                if status != 200:
-                    logger.warning("HTTP %d received from %s", status, url)
+                if response.status != 200:
+                    logger.warning("HTTP %d received from %s", response.status, url)
                     return None
-                data_bytes = response.read()
-                try:
-                    return json.loads(data_bytes.decode("utf-8"))
-                except (json.JSONDecodeError, UnicodeDecodeError) as err:
-                    logger.error("Malformed JSON response from %s: %s", url, err)
-                    return None
-        except urllib.error.HTTPError as err:
-            logger.error("HTTP error querying %s: %d %s", url, err.code, err.reason)
-            return None
-        except urllib.error.URLError as err:
-            logger.error("Network error connecting to %s: %s", url, err.reason)
-            return None
-        except TimeoutError:
-            logger.error("Connection timed out querying %s (timeout=%.1fs)", url, self.timeout)
-            return None
-        except Exception as err:
-            logger.error("Unexpected error querying %s: %s", url, err)
+                return json.loads(response.read().decode("utf-8"))
+        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, json.JSONDecodeError, UnicodeDecodeError, Exception) as err:
+            logger.error("Error querying %s: %s", url, err)
             return None
 
     def get_switches(self) -> List[Dict[str, Any]]:
-        """Retrieve list of connected switches from controller."""
+        """Retrieve list of connected switches."""
         data = self._make_request("/topology/switches")
-        if isinstance(data, list):
-            return data
-        return []
+        return data if isinstance(data, list) else []
 
     def get_links(self) -> List[Dict[str, Any]]:
-        """Retrieve list of inter-switch links from controller."""
+        """Retrieve list of inter-switch links."""
         data = self._make_request("/topology/links")
-        if isinstance(data, list):
-            return data
-        return []
+        return data if isinstance(data, list) else []
 
     def get_hosts(self) -> List[Dict[str, Any]]:
-        """Retrieve list of discovered hosts from controller."""
+        """Retrieve list of discovered hosts."""
         data = self._make_request("/topology/hosts")
-        if isinstance(data, list):
-            return data
-        return []
+        return data if isinstance(data, list) else []
 
     def get_status(self) -> Dict[str, Any]:
-        """Retrieve dynamic SDN operational status, active paths, and events."""
+        """Retrieve dynamic SDN operational status and active paths."""
         data = self._make_request("/topology/status")
         if isinstance(data, dict):
             return data
@@ -114,9 +77,6 @@ class TopologyClient:
                 "links": data.get("links", []),
                 "hosts": data.get("hosts", []),
             }
-
-        # Fallback to querying endpoints individually if /topology/full is missing
-        logger.info("Fetching individual topology components as fallback...")
         return {
             "switches": self.get_switches(),
             "links": self.get_links(),
@@ -124,21 +84,11 @@ class TopologyClient:
         }
 
     def save_topology(self, filepath: str, topology_data: Optional[Dict[str, Any]] = None) -> bool:
-        """Save topology data to a JSON file.
-
-        Args:
-            filepath: Target file path
-            topology_data: Optional topology dict to save; fetches from controller if None.
-
-        Returns:
-            True if saved successfully, False otherwise.
-        """
-        if topology_data is None:
-            topology_data = self.get_full_topology()
-
+        """Save topology data to a JSON file."""
+        data = topology_data if topology_data is not None else self.get_full_topology()
         try:
             with open(filepath, "w", encoding="utf-8") as f:
-                json.dump(topology_data, f, indent=2)
+                json.dump(data, f, indent=2)
             logger.info("Saved topology data to %s", filepath)
             return True
         except (OSError, IOError) as err:
@@ -147,126 +97,41 @@ class TopologyClient:
 
     @staticmethod
     def load_topology(filepath: str) -> Dict[str, Any]:
-        """Load topology data from an offline JSON file.
-
-        Args:
-            filepath: Path to the JSON topology file.
-
-        Returns:
-            Dictionary with switches, links, and hosts. Empty dict if load fails.
-        """
+        """Load topology data from an offline JSON file."""
+        fallback = {"switches": [], "links": [], "hosts": []}
         try:
             with open(filepath, "r", encoding="utf-8") as f:
                 data = json.load(f)
             if not isinstance(data, dict):
-                logger.error("Topology file %s did not contain a JSON object", filepath)
-                return {"switches": [], "links": [], "hosts": []}
+                return fallback
             return {
                 "switches": data.get("switches", []),
                 "links": data.get("links", []),
                 "hosts": data.get("hosts", []),
             }
-        except (OSError, IOError, json.JSONDecodeError) as err:
-            logger.error("Failed to load topology from %s: %s", filepath, err)
-            return {"switches": [], "links": [], "hosts": []}
+        except (OSError, IOError, json.JSONDecodeError):
+            return fallback
 
 
 def main() -> None:
-    """CLI entrypoint for testing topology client."""
-    parser = argparse.ArgumentParser(
-        description="SDN Topology Client - Query and inspect controller topology"
-    )
-    parser.add_argument(
-        "--controller",
-        default="http://127.0.0.1:8080",
-        help="Controller REST API base URL (default: http://127.0.0.1:8080)",
-    )
-    parser.add_argument(
-        "--timeout",
-        type=float,
-        default=5.0,
-        help="HTTP request timeout in seconds (default: 5.0)",
-    )
-    parser.add_argument(
-        "--save",
-        type=str,
-        default=None,
-        help="File path to save the retrieved topology JSON",
-    )
-    parser.add_argument(
-        "--load",
-        type=str,
-        default=None,
-        help="File path to load an offline topology JSON instead of querying controller",
-    )
-    parser.add_argument(
-        "--status",
-        action="store_true",
-        help="Query controller dynamic status and active path information",
-    )
-    parser.add_argument(
-        "--verbose",
-        "-v",
-        action="store_true",
-        help="Enable verbose debug logging",
-    )
-
+    """CLI entrypoint for querying topology client."""
+    parser = argparse.ArgumentParser(description="SDN Topology Client")
+    parser.add_argument("--controller", default="http://127.0.0.1:8080", help="Controller REST API URL")
+    parser.add_argument("--timeout", type=float, default=5.0, help="HTTP timeout (s)")
+    parser.add_argument("--save", help="Path to save retrieved JSON topology")
+    parser.add_argument("--load", help="Load offline JSON file instead of querying controller")
+    parser.add_argument("--status", action="store_true", help="Query dynamic SDN status")
     args = parser.parse_args()
 
-    log_level = logging.DEBUG if args.verbose else logging.INFO
-    logging.basicConfig(level=log_level, format="%(asctime)s [%(levelname)s] %(message)s")
-
     client = TopologyClient(base_url=args.controller, timeout=args.timeout)
+    topo = client.load_topology(args.load) if args.load else client.get_full_topology()
 
-    if args.load:
-        print(f"Loading topology from offline file: {args.load}")
-        topology = client.load_topology(args.load)
-    else:
-        print(f"Connecting to SDN controller at {args.controller}...")
-        topology = client.get_full_topology()
-
-    print("\n--- Network Topology Summary ---")
-    switches = topology.get("switches", [])
-    links = topology.get("links", [])
-    hosts = topology.get("hosts", [])
-
-    print(f"Switches: {len(switches)}")
-    for sw in switches:
-        ports = sw.get("ports", [])
-        port_list = ", ".join(f"p{p.get('port_no')}" for p in ports)
-        print(f"  Switch {sw.get('dpid')}: Ports [{port_list}]")
-
-    print(f"\nLinks: {len(links)}")
-    for link in links:
-        print(
-            f"  {link.get('src_dpid')}:{link.get('src_port')} <---> "
-            f"{link.get('dst_dpid')}:{link.get('dst_port')}"
-        )
-
-    print(f"\nHosts: {len(hosts)}")
-    for host in hosts:
-        print(
-            f"  MAC: {host.get('mac')} | IP: {host.get('ipv4')} | "
-            f"Attached: {host.get('dpid')}:{host.get('port')}"
-        )
-
+    print(f"\n--- Topology: {len(topo.get('switches', []))} switches, {len(topo.get('links', []))} links, {len(topo.get('hosts', []))} hosts ---")
     if args.status:
-        print(f"\n--- Dynamic SDN Status ({args.controller}) ---")
-        status = client.get_status()
-        print(f"Switches Online : {status.get('switches_online')}")
-        print(f"Active Links    : {status.get('links_active')}")
-        print(f"Tracked Hosts   : {status.get('hosts_tracked')}")
-        print("Active Shortest Paths:")
-        for pair, pdata in status.get("active_paths", {}).items():
-            path_str = " -> ".join(pdata.get("path", []))
-            print(f"  {pair}: {path_str} ({pdata.get('hops')} hops, status: {pdata.get('status')})")
-        print("Recent Controller Events:")
-        for ev in status.get("recent_events", [])[-5:]:
-            print(f"  [{ev.get('type')}] {ev}")
-
+        st = client.get_status()
+        print(f"SDN Status: {st.get('switches_online')} switches online, active paths: {len(st.get('active_paths', {}))}")
     if args.save:
-        client.save_topology(args.save, topology)
-        print(f"\nTopology successfully saved to {args.save}")
+        client.save_topology(args.save, topo)
 
 
 if __name__ == "__main__":

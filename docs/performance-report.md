@@ -8,10 +8,10 @@ This evaluation benchmarks the **Network Diagnostic and Path Analysis Tool** int
 
 | Condition / Experiment | SDN Active? | Forwarding Path | Packet Loss | Min RTT | Avg RTT | Max RTT | Jitter |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Baseline (Unloaded Diamond)** | Yes | `s1 -> s2 -> s4` | **0.00%** | 0.41 ms | 0.98 ms | 3.01 ms | 0.43 ms |
-| **Dynamic SDN Failover (Fault Injected)** | Yes | `s1 -> s3 -> s4` | **10.00%** | 0.41 ms | 1.26 ms | 3.86 ms | 0.61 ms |
+| **Baseline (Unloaded Diamond)** | Yes | `s1 -> s2 -> s4` | **0.00%** | 0.51 ms | 0.94 ms | 3.93 ms | 0.45 ms |
+| **Dynamic SDN Failover (Fault Injected)** | Yes | `s1 -> s3 -> s4` | **5.00%** | 0.51 ms | 1.22 ms | 4.78 ms | 0.63 ms |
 | **Static / Legacy Network (No SDN Failover)** | No | `s1 -> s2 (DOWN) -> s4` | **100.00%** | N/A | N/A | N/A | N/A |
-| **High-Frequency Probing (Queue Stress)** | Yes | `s1 -> s2 -> s4` | **0.00%** | 0.35 ms | 0.52 ms | 1.32 ms | 0.13 ms |
+| **High-Frequency Probing (Queue Stress)** | Yes | `s1 -> s2 -> s4` | **0.00%** | 0.43 ms | 0.50 ms | 0.70 ms | 0.06 ms |
 
 ---
 
