@@ -27,9 +27,11 @@ VENV_DIR="$PROJECT_DIR/.venv"
 if [ -n "$SUDO_USER" ]; then
     REAL_USER="$SUDO_USER"
     REAL_GROUP="$(id -gn "$SUDO_USER")"
+    USER_HOME="$(getent passwd "$SUDO_USER" | cut -d: -f6)"
 else
     REAL_USER="$(whoami)"
     REAL_GROUP="$(id -gn)"
+    USER_HOME="$HOME"
 fi
 
 echo -e "\n${BOLD}[1/5] Checking System Environment...${RESET}"
@@ -113,10 +115,25 @@ if [ "$PY_MINOR" -ge 12 ]; then
         echo -e "${YELLOW}[!] Direct pip install failed (setuptools >=70 deprecation). Applying compatibility patch...${RESET}"
         TMP_RYU_DIR=$(mktemp -d /tmp/ryu-install-XXXXXX)
         if git clone --depth 1 https://github.com/olibrius/ryu4312.git "$TMP_RYU_DIR"; then
-            sed -i "s/_main_module()._orig_get_script_args = easy_install.get_script_args/if hasattr(easy_install, 'get_script_args'): _main_module()._orig_get_script_args = easy_install.get_script_args\n    else: _main_module()._orig_get_script_args = lambda *args, **kwargs: []/" "$TMP_RYU_DIR/ryu/hooks.py"
-            sed -i "s/packaging.override_get_script_args = my_get_script_args/if hasattr(packaging, 'override_get_script_args'): packaging.override_get_script_args = my_get_script_args/" "$TMP_RYU_DIR/ryu/hooks.py"
-            sed -i "s/easy_install.get_script_args = my_get_script_args/if hasattr(easy_install, 'get_script_args'): easy_install.get_script_args = my_get_script_args/" "$TMP_RYU_DIR/ryu/hooks.py"
-
+            python3 -c "
+path = '$TMP_RYU_DIR/ryu/hooks.py'
+with open(path, 'r') as f:
+    s = f.read()
+s = s.replace(
+    '_main_module()._orig_get_script_args = easy_install.get_script_args',
+    'if hasattr(easy_install, \'get_script_args\'):\n        _main_module()._orig_get_script_args = easy_install.get_script_args\n    else:\n        _main_module()._orig_get_script_args = lambda *args, **kwargs: []'
+)
+s = s.replace(
+    'packaging.override_get_script_args = my_get_script_args',
+    'if hasattr(packaging, \'override_get_script_args\'): packaging.override_get_script_args = my_get_script_args'
+)
+s = s.replace(
+    'easy_install.get_script_args = my_get_script_args',
+    'if hasattr(easy_install, \'get_script_args\'): easy_install.get_script_args = my_get_script_args'
+)
+with open(path, 'w') as f:
+    f.write(s)
+"
             if "$VENV_DIR/bin/pip" install "$TMP_RYU_DIR"; then
                 "$VENV_DIR/bin/pip" install --upgrade "eventlet>=0.36.0" "dnspython>=2.0.0"
                 INSTALL_SUCCESS=true
@@ -136,11 +153,13 @@ if [ "$PY_MINOR" -ge 12 ]; then
 else
     echo -e "${CYAN}[*] Installing Ryu package for Python ${PY_MAJOR}.${PY_MINOR}...${RESET}"
     if "$VENV_DIR/bin/pip" install ryu; then
+        "$VENV_DIR/bin/pip" install --upgrade "eventlet>=0.36.0" "dnspython>=2.0.0" 2>/dev/null || true
         INSTALL_SUCCESS=true
         echo -e "${GREEN}[✓] Successfully installed official ryu package.${RESET}"
     else
         echo -e "${YELLOW}[!] Standard install failed. Trying patched Ryu fork...${RESET}"
         if "$VENV_DIR/bin/pip" install git+https://github.com/olibrius/ryu4312.git; then
+            "$VENV_DIR/bin/pip" install --upgrade "eventlet>=0.36.0" "dnspython>=2.0.0" 2>/dev/null || true
             INSTALL_SUCCESS=true
             echo -e "${GREEN}[✓] Successfully installed patched Ryu fork.${RESET}"
         fi
@@ -155,17 +174,23 @@ fi
 echo -e "\n${BOLD}[5/5] Configuring Executable Links & Permissions...${RESET}"
 
 # Create convenient symlinks in ~/.local/bin (no root required) and /usr/local/bin
-mkdir -p "$HOME/.local/bin"
+mkdir -p "$USER_HOME/.local/bin"
 if [ -f "$VENV_DIR/bin/ryu-manager" ]; then
-    ln -sf "$VENV_DIR/bin/ryu-manager" "$HOME/.local/bin/ryu-manager"
-    ln -sf "$VENV_DIR/bin/ryu" "$HOME/.local/bin/ryu"
+    ln -sf "$VENV_DIR/bin/ryu-manager" "$USER_HOME/.local/bin/ryu-manager"
+    ln -sf "$VENV_DIR/bin/ryu" "$USER_HOME/.local/bin/ryu"
+    if [ -n "$REAL_USER" ] && [ "$REAL_USER" != "root" ]; then
+        chown -h "$REAL_USER:$REAL_GROUP" "$USER_HOME/.local/bin/ryu-manager" "$USER_HOME/.local/bin/ryu" 2>/dev/null || true
+    fi
     [ -n "$SUDO" ] && $SUDO ln -sf "$VENV_DIR/bin/ryu-manager" /usr/local/bin/ryu-manager 2>/dev/null || true
     [ -n "$SUDO" ] && $SUDO ln -sf "$VENV_DIR/bin/ryu" /usr/local/bin/ryu 2>/dev/null || true
-    echo -e "${GREEN}[✓] Symlinked ryu-manager -> $HOME/.local/bin/ryu-manager${RESET}"
+    echo -e "${GREEN}[✓] Symlinked ryu-manager -> $USER_HOME/.local/bin/ryu-manager${RESET}"
 elif [ -f "$VENV_DIR/bin/os-ken-manager" ]; then
-    ln -sf "$VENV_DIR/bin/os-ken-manager" "$HOME/.local/bin/ryu-manager"
+    ln -sf "$VENV_DIR/bin/os-ken-manager" "$USER_HOME/.local/bin/ryu-manager"
+    if [ -n "$REAL_USER" ] && [ "$REAL_USER" != "root" ]; then
+        chown -h "$REAL_USER:$REAL_GROUP" "$USER_HOME/.local/bin/ryu-manager" 2>/dev/null || true
+    fi
     [ -n "$SUDO" ] && $SUDO ln -sf "$VENV_DIR/bin/os-ken-manager" /usr/local/bin/ryu-manager 2>/dev/null || true
-    echo -e "${GREEN}[✓] Symlinked ryu-manager -> $HOME/.local/bin/ryu-manager${RESET}"
+    echo -e "${GREEN}[✓] Symlinked ryu-manager -> $USER_HOME/.local/bin/ryu-manager${RESET}"
 fi
 
 # Ensure correct file ownership for virtual environment
