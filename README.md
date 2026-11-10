@@ -94,7 +94,7 @@ The SDN controller and virtual network emulation require Mininet, Open vSwitch, 
 
 ```bash
 # Clone the repository
-git clone git@github.com:YatishGowda09/network-diagnostic-tool.git
+git clone https://github.com/YatishGowda09/network-diagnostic-tool.git
 cd network-diagnostic-tool
 
 # Run the single-step automated setup script
@@ -205,17 +205,3 @@ sudo python3 scripts/flow_inspector.py
    UDP probe round-trip times measure end-to-end application-to-application transit. Without synchronized per-switch telemetry or in-band network telemetry (INT), end-to-end measurements do not reveal individual link delays.
 
 ---
-
-## 9. Evaluation Rubric & Deliverable Status
-
-All requirements for both **Deliverable 1 (15 Marks)** and **Deliverable 2 (25 Marks)** are implemented and verified:
-- [x] **Problem Understanding & Architecture (2/2):** Fully documented in `docs/architecture.md`.
-- [x] **TCP/UDP Socket Implementation (4/4):** Low-level socket programming, monotonic timing, RFC 3550 jitter.
-- [x] **Mininet + SDN Implementation (4/4):** Diamond topology, OpenFlow 1.3, Ryu L2 learning switch.
-- [x] **Socket-SDN Integration (3/3):** Topology REST queries, graph correlation, path reporting.
-- [x] **Initial Testing & Demo (2/2):** 67 unit & integration tests passing.
-- [x] **Complete Application Functionality (4/4):** End-to-end diagnostics and topology analysis.
-- [x] **Dynamic SDN Functionality (6/6):** Active rerouting, `OFPFC_DELETE` stale flow purging, `GET /topology/status`.
-- [x] **Challenging Scenario / Robustness (4/4):** Automated link failure injection & failover demo (`scripts/failover_demo.py`).
-- [x] **Performance Evaluation & Comparison (5/5):** Multi-condition benchmarks comparing Baseline vs. Dynamic SDN vs. Static Failure in `docs/performance-report.md`.
-- [x] **Documentation & Final Demo (6/6):** Complete runbooks, architecture docs, performance reports.
