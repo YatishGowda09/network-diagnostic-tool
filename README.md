@@ -90,20 +90,19 @@ network-diagnostic-tool/
 The core diagnostic tool, topology client, path analysis, and report generator utilize **only Python's standard library** and require no external package installations.
 
 ### Demonstration Environment (Ubuntu VM)
-The SDN controller and virtual network emulation require Mininet, Open vSwitch, and Ryu:
+The SDN controller and virtual network emulation require Mininet, Open vSwitch, and Ryu. An automated setup script handles all dependencies across Ubuntu 20.04, 22.04, 24.04, and 26.04+:
 
 ```bash
-# Update package repositories
-sudo apt update
+# Clone the repository
+git clone git@github.com:YatishGowda09/network-diagnostic-tool.git
+cd network-diagnostic-tool
 
-# Install Mininet and Open vSwitch
-sudo apt install -y mininet openvswitch-switch python3-pip
-
-# Install Ryu SDN controller (inside Ubuntu virtual environment or system)
-pip3 install ryu
+# Run the single-step automated setup script
+chmod +x install_dependencies.sh
+./install_dependencies.sh
 ```
 
-> **Note on Python versions:** On systems with Python 3.12+, Ryu dependencies may require `pip install ryu --break-system-packages` or using the `os-ken` OpenFlow library. See [docs/demo-guide.md](docs/demo-guide.md) for troubleshooting.
+*(The script automatically detects your Ubuntu and Python version, installs Mininet and Open vSwitch via `apt`, creates a virtual environment, installs the compatible Ryu SDN framework, and links `ryu-manager` to `/usr/local/bin` for seamless multi-terminal execution. See [docs/demo-guide.md](docs/demo-guide.md) for detailed manual instructions).*
 
 ---
 

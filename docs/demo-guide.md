@@ -12,13 +12,58 @@ This document is the **primary operational runbook** for demonstrating the Netwo
 ## 1. Prerequisites & Environment Setup (Ubuntu VM)
 
 ### System Requirements
-- Ubuntu 20.04 LTS or Ubuntu 22.04 LTS (recommended inside VirtualBox, VMware, or cloud instance)
+- Ubuntu 20.04, 22.04, 24.04, or 26.04+ (VirtualBox, VMware, or cloud instance)
 - Python 3.8+
 - Root / `sudo` administrative privileges
 
-### Installation Commands
+### Clone & Automated One-Step Setup (Recommended)
 
-Run the following commands in an Ubuntu terminal:
+Once you have installed `git`, clone the repository and execute the automated setup script. It inspects your Python and Ubuntu release, installs Mininet, Open vSwitch, and system build libraries, sets up a virtual environment, and configures Ryu/`os-ken` with global CLI symlinks:
+
+```bash
+# 1. Clone repository
+git clone git@github.com:YatishGowda09/network-diagnostic-tool.git
+cd network-diagnostic-tool
+
+# 2. Run the one-step automated dependency installer
+chmod +x install_dependencies.sh
+./install_dependencies.sh
+```
+
+---
+
+### Manual Installation Commands (Reference)
+
+If you prefer installing dependencies manually without the automated script:
+
+#### Option A: Ubuntu 24.04+ LTS / Python 3.12+ (Modern Environments)
+
+Modern Ubuntu releases enforce PEP 668 (externally managed environment) and Python 3.12 removes legacy build modules (`distutils`, `imp`). Use a virtual environment with the Python 3.12-compatible Ryu build or `os-ken`:
+
+```bash
+# Update package repositories
+sudo apt update
+
+# Install Mininet, Open vSwitch, build libraries, and Python venv
+sudo apt install -y mininet openvswitch-switch python3-pip python3-venv git gcc libffi-dev libssl-dev libxml2-dev libxslt1-dev zlib1g-dev
+
+# Create and activate an isolated virtual environment
+python3 -m venv --system-site-packages ~/ryu-env
+source ~/ryu-env/bin/activate
+
+# Upgrade pip, setuptools, and wheel
+pip install --upgrade pip setuptools wheel
+
+# Install Python 3.12-compatible Ryu fork (preserves ryu-manager CLI)
+pip install git+https://github.com/olibrius/ryu4312.git
+
+# Alternatively, install OpenStack's maintained os-ken fork:
+# pip install os-ken
+```
+
+#### Option B: Ubuntu 20.04 LTS / 22.04 LTS (Python 3.8 - 3.10)
+
+On legacy Ubuntu releases with Python 3.8-3.10:
 
 ```bash
 # Update package repositories
@@ -29,15 +74,6 @@ sudo apt install -y mininet openvswitch-switch python3-pip git
 
 # Install Ryu SDN Framework
 pip3 install ryu
-```
-
-### Clone Repository
-
-Clone the project repository to your workspace:
-
-```bash
-git clone git@github.com:YatishGowda09/network-diagnostic-tool.git
-cd network-diagnostic-tool
 ```
 
 ---
@@ -270,6 +306,7 @@ python3 src/diagnostic/udp_client.py --target 127.0.0.1 --port 5005 --count 10
 
 | Symptom / Issue | Probable Cause | Corrective Action |
 | :--- | :--- | :--- |
+| **`pip3 install ryu` fails (`externally-managed` or `distutils` missing)** | PEP 668 restriction or Python 3.12+ removed legacy build tools | Create a venv (`python3 -m venv ~/ryu-env && source ~/ryu-env/bin/activate`) and install the patched fork `pip install git+https://github.com/olibrius/ryu4312.git` or `pip install os-ken`. |
 | **`Connection refused` on REST API** | Ryu controller is not running or WSGI server crashed | Verify Terminal 1 is active. Ensure port `8080` is not blocked by another process (`sudo lsof -i :8080`). |
 | **`pingall` reports 100% dropped packets** | Switches failed to establish OpenFlow handshake | Check OpenFlow port. If Ryu listens on `6653`, ensure Mininet connects to `6653`. Ensure `--observe-links` is supplied. |
 | **`Address already in use` (Port 5005 or 6653)** | Lingering server or old Ryu instance | Kill existing process: `sudo kill -9 $(pgrep -f udp_server)` or `sudo kill -9 $(pgrep -f ryu-manager)`. |

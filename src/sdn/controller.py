@@ -139,7 +139,19 @@ try:
 
     RYU_AVAILABLE = True
 except ImportError:
-    RYU_AVAILABLE = False
+    try:
+        from os_ken.base import app_manager  # type: ignore
+        from os_ken.controller import ofp_event  # type: ignore
+        from os_ken.controller.handler import CONFIG_DISPATCHER, MAIN_DISPATCHER, set_ev_cls  # type: ignore
+        from os_ken.ofproto import ofproto_v1_3  # type: ignore
+        from os_ken.lib.packet import packet, ethernet, ether_types  # type: ignore
+        from os_ken.app.wsgi import ControllerBase, WSGIApplication, route, Response  # type: ignore
+        from os_ken.topology import event as topo_event  # type: ignore
+        from os_ken.topology.api import get_switch, get_link, get_host  # type: ignore
+
+        RYU_AVAILABLE = True
+    except ImportError:
+        RYU_AVAILABLE = False
 
     class DummyBase:
         def __init__(self, *args: Any, **kwargs: Any) -> None: pass
