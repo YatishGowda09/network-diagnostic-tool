@@ -7,6 +7,6 @@
 #   sudo apt install -y mininet openvswitch-switch
 #
 # Ryu SDN controller (required only on the Ubuntu demo VM):
-ryu-manager; python_version < "3.12"
+ryu; python_version < "3.12"
 # NOTE: For Python 3.12+, ryu may require patching or using os-ken fork.
 # See docs/demo-guide.md for details.

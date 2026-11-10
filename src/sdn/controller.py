@@ -153,6 +153,7 @@ except ImportError:
     except ImportError:
         RYU_AVAILABLE = False
 
+if not RYU_AVAILABLE:
     class DummyBase:
         def __init__(self, *args: Any, **kwargs: Any) -> None: pass
     app_manager = DummyBase()  # type: ignore

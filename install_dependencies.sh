@@ -106,13 +106,31 @@ INSTALL_SUCCESS=false
 if [ "$PY_MINOR" -ge 12 ]; then
     echo -e "${YELLOW}[!] Python 3.12+ detected. Installing Python 3.12-compatible Ryu build...${RESET}"
     if "$VENV_DIR/bin/pip" install git+https://github.com/olibrius/ryu4312.git; then
+        "$VENV_DIR/bin/pip" install --upgrade "eventlet>=0.36.0" "dnspython>=2.0.0"
         INSTALL_SUCCESS=true
         echo -e "${GREEN}[✓] Successfully installed Python 3.12 Ryu fork (olibrius/ryu4312).${RESET}"
     else
-        echo -e "${YELLOW}[!] Git fork install failed. Falling back to OpenStack os-ken...${RESET}"
-        if "$VENV_DIR/bin/pip" install os-ken; then
-            INSTALL_SUCCESS=true
-            echo -e "${GREEN}[✓] Successfully installed os-ken fallback.${RESET}"
+        echo -e "${YELLOW}[!] Direct pip install failed (setuptools >=70 deprecation). Applying compatibility patch...${RESET}"
+        TMP_RYU_DIR=$(mktemp -d /tmp/ryu-install-XXXXXX)
+        if git clone --depth 1 https://github.com/olibrius/ryu4312.git "$TMP_RYU_DIR"; then
+            sed -i "s/_main_module()._orig_get_script_args = easy_install.get_script_args/if hasattr(easy_install, 'get_script_args'): _main_module()._orig_get_script_args = easy_install.get_script_args\n    else: _main_module()._orig_get_script_args = lambda *args, **kwargs: []/" "$TMP_RYU_DIR/ryu/hooks.py"
+            sed -i "s/packaging.override_get_script_args = my_get_script_args/if hasattr(packaging, 'override_get_script_args'): packaging.override_get_script_args = my_get_script_args/" "$TMP_RYU_DIR/ryu/hooks.py"
+            sed -i "s/easy_install.get_script_args = my_get_script_args/if hasattr(easy_install, 'get_script_args'): easy_install.get_script_args = my_get_script_args/" "$TMP_RYU_DIR/ryu/hooks.py"
+
+            if "$VENV_DIR/bin/pip" install "$TMP_RYU_DIR"; then
+                "$VENV_DIR/bin/pip" install --upgrade "eventlet>=0.36.0" "dnspython>=2.0.0"
+                INSTALL_SUCCESS=true
+                echo -e "${GREEN}[✓] Successfully installed patched Ryu fork with Python 3.12+ eventlet/dnspython fixes.${RESET}"
+            fi
+            rm -rf "$TMP_RYU_DIR"
+        fi
+
+        if [ "$INSTALL_SUCCESS" = false ]; then
+            echo -e "${YELLOW}[!] Git fork install failed. Falling back to OpenStack os-ken...${RESET}"
+            if "$VENV_DIR/bin/pip" install os-ken; then
+                INSTALL_SUCCESS=true
+                echo -e "${GREEN}[✓] Successfully installed os-ken fallback.${RESET}"
+            fi
         fi
     fi
 else
@@ -136,14 +154,18 @@ fi
 
 echo -e "\n${BOLD}[5/5] Configuring Executable Links & Permissions...${RESET}"
 
-# Create convenient symlink in /usr/local/bin so ryu-manager is available globally across all terminals
+# Create convenient symlinks in ~/.local/bin (no root required) and /usr/local/bin
+mkdir -p "$HOME/.local/bin"
 if [ -f "$VENV_DIR/bin/ryu-manager" ]; then
-    $SUDO ln -sf "$VENV_DIR/bin/ryu-manager" /usr/local/bin/ryu-manager
-    echo -e "${GREEN}[✓] Symlinked /usr/local/bin/ryu-manager -> $VENV_DIR/bin/ryu-manager${RESET}"
+    ln -sf "$VENV_DIR/bin/ryu-manager" "$HOME/.local/bin/ryu-manager"
+    ln -sf "$VENV_DIR/bin/ryu" "$HOME/.local/bin/ryu"
+    [ -n "$SUDO" ] && $SUDO ln -sf "$VENV_DIR/bin/ryu-manager" /usr/local/bin/ryu-manager 2>/dev/null || true
+    [ -n "$SUDO" ] && $SUDO ln -sf "$VENV_DIR/bin/ryu" /usr/local/bin/ryu 2>/dev/null || true
+    echo -e "${GREEN}[✓] Symlinked ryu-manager -> $HOME/.local/bin/ryu-manager${RESET}"
 elif [ -f "$VENV_DIR/bin/os-ken-manager" ]; then
-    $SUDO ln -sf "$VENV_DIR/bin/os-ken-manager" /usr/local/bin/ryu-manager
-    $SUDO ln -sf "$VENV_DIR/bin/os-ken-manager" /usr/local/bin/os-ken-manager
-    echo -e "${GREEN}[✓] Symlinked /usr/local/bin/ryu-manager -> $VENV_DIR/bin/os-ken-manager${RESET}"
+    ln -sf "$VENV_DIR/bin/os-ken-manager" "$HOME/.local/bin/ryu-manager"
+    [ -n "$SUDO" ] && $SUDO ln -sf "$VENV_DIR/bin/os-ken-manager" /usr/local/bin/ryu-manager 2>/dev/null || true
+    echo -e "${GREEN}[✓] Symlinked ryu-manager -> $HOME/.local/bin/ryu-manager${RESET}"
 fi
 
 # Ensure correct file ownership for virtual environment
